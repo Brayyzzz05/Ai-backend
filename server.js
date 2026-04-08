@@ -1,10 +1,15 @@
 import express from "express";
-import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json());
 
-const SAMBANOVA_API_KEY = process.env.SAMBANOVA_API_KEY;
+const PORT = process.env.PORT || 3000;
+const API_KEY = process.env.SAMBANOVA_API_KEY;
+
+// Health check (fixes "CANNOT GET /")
+app.get("/", (req, res) => {
+  res.send("✅ Backend is running");
+});
 
 app.post("/chat", async (req, res) => {
   try {
@@ -17,28 +22,32 @@ app.post("/chat", async (req, res) => {
     const response = await fetch("https://api.sambanova.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${SAMBANOVA_API_KEY}`,
+        "Authorization": `Bearer ${API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "Meta-Llama-3.1-70B-Instruct", // example model
+        model: "Meta-Llama-3.1-70B-Instruct",
         temperature: 0.3,
-        max_tokens: 200,
+        max_tokens: 300,
 
         messages: [
           {
             role: "system",
             content: `
-You are a strict study AI.
+You are a STRICT study AI.
 
 RULES:
-- Always return:
-  Answer: ...
-  Explanation: ...
+- Always respond in this format:
+
+Answer: <final answer>
+Explanation: <step-by-step explanation>
+
 - Never repeat the question.
-- Solve math correctly (factorisation, algebra, identities).
-- Be clear and structured.
-- Answer all subjects.
+- Be precise and correct.
+- For math:
+  - Always simplify properly
+  - Detect identities and factor correctly
+- Answer all subjects clearly.
             `
           },
           {
@@ -51,22 +60,22 @@ RULES:
 
     const data = await response.json();
 
-    const text = data?.choices?.[0]?.message?.content;
+    const aiText = data?.choices?.[0]?.message?.content;
 
-    if (!text) {
+    if (!aiText) {
       return res.json({ error: "AI failed" });
     }
 
     res.json({
-      answer: text
+      reply: aiText
     });
 
   } catch (err) {
     console.error(err);
-    res.json({ error: "AI error" });
+    res.json({ error: "Server error" });
   }
 });
 
-app.listen(3000, () => {
-  console.log("SambaNova backend running");
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
