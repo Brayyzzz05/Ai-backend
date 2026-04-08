@@ -3,12 +3,8 @@ import express from "express";
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.SAMBANOVA_API_KEY;
-
-// Health check (fixes "CANNOT GET /")
 app.get("/", (req, res) => {
-  res.send("✅ Backend is running");
+  res.send("✅ Backend running");
 });
 
 app.post("/chat", async (req, res) => {
@@ -16,38 +12,32 @@ app.post("/chat", async (req, res) => {
     const { message } = req.body;
 
     if (!message) {
-      return res.json({ error: "No message provided" });
+      return res.json({ reply: "❌ No message provided" });
     }
 
     const response = await fetch("https://api.sambanova.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${API_KEY}`,
+        "Authorization": `Bearer ${process.env.SAMBANOVA_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
         model: "Meta-Llama-3.1-70B-Instruct",
         temperature: 0.3,
         max_tokens: 300,
-
         messages: [
           {
             role: "system",
             content: `
-You are a STRICT study AI.
+You are a strict study AI.
 
-RULES:
-- Always respond in this format:
-
-Answer: <final answer>
-Explanation: <step-by-step explanation>
-
-- Never repeat the question.
-- Be precise and correct.
-- For math:
-  - Always simplify properly
-  - Detect identities and factor correctly
-- Answer all subjects clearly.
+Rules:
+- Always respond in:
+Answer: ...
+Explanation: ...
+- Do NOT return undefined.
+- Always give a full answer.
+- Be clear and correct.
             `
           },
           {
@@ -63,19 +53,19 @@ Explanation: <step-by-step explanation>
     const aiText = data?.choices?.[0]?.message?.content;
 
     if (!aiText) {
-      return res.json({ error: "AI failed" });
+      return res.json({ reply: "❌ AI failed to respond" });
     }
 
-    res.json({
-      reply: aiText
-    });
+    res.json({ reply: aiText });
 
   } catch (err) {
     console.error(err);
-    res.json({ error: "Server error" });
+    res.json({ reply: "❌ Server error" });
   }
 });
 
+const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
