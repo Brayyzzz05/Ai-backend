@@ -7,22 +7,17 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+// 🧠 MEMORY (per user)
+const memory = new Map();
+
 // 🧠 AI FUNCTION
-async function askAI(message) {
+async function askAI(messages) {
   const res = await axios.post(
     "https://api.openai.com/v1/chat/completions",
     {
       model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are a study tutor. Always respond with Answer and Explanation."
-        },
-        {
-          role: "user",
-          content: message
-        }
-      ]
+      messages,
+      temperature: 0.4
     },
     {
       headers: {
@@ -34,17 +29,51 @@ async function askAI(message) {
   return res.data.choices[0].message.content;
 }
 
-// 💬 CHAT ENDPOINT
+// 💬 CHAT (MAIN)
 app.post("/chat", async (req, res) => {
   try {
-    const { message } = req.body;
+    const { userId, message } = req.body;
 
-    const reply = await askAI(message);
+    if (!memory.has(userId)) {
+      memory.set(userId, []);
+    }
+
+    const history = memory.get(userId);
+
+    const messages = [
+      {
+        role: "system",
+        content: `
+You are a powerful AI tutor like ChatGPT.
+
+Rules:
+- Understand ANY subject
+- Answer clearly
+- Show steps for math
+- Keep explanations simple
+- Format:
+
+Answer:
+Explanation:
+`
+      },
+      ...history,
+      { role: "user", content: message }
+    ];
+
+    const reply = await askAI(messages);
+
+    // save memory
+    history.push({ role: "user", content: message });
+    history.push({ role: "assistant", content: reply });
+
+    // limit memory
+    if (history.length > 20) history.splice(0, 2);
 
     res.json({ reply });
 
   } catch (err) {
-    console.log(err.message);
+    console.log(err.response?.data || err.message);
     res.status(500).json({ error: "AI failed" });
   }
 });
@@ -53,9 +82,13 @@ app.post("/chat", async (req, res) => {
 app.post("/quiz", async (req, res) => {
   const { topic } = req.body;
 
-  const reply = await askAI(
-    `Create a quiz question with answer and explanation about: ${topic}`
-  );
+  const reply = await askAI([
+    {
+      role: "system",
+      content: "Create a quiz question with answer and explanation."
+    },
+    { role: "user", content: topic }
+  ]);
 
   res.json({ reply });
 });
@@ -64,14 +97,18 @@ app.post("/quiz", async (req, res) => {
 app.post("/flashcard", async (req, res) => {
   const { topic } = req.body;
 
-  const reply = await askAI(
-    `Create a flashcard (question + answer) about: ${topic}`
-  );
+  const reply = await askAI([
+    {
+      role: "system",
+      content: "Create a flashcard: Question + Answer."
+    },
+    { role: "user", content: topic }
+  ]);
 
   res.json({ reply });
 });
 
-// 📸 IMAGE (basic)
+// 📸 IMAGE
 app.post("/image", async (req, res) => {
   const { imageUrl, prompt } = req.body;
 
@@ -100,14 +137,16 @@ app.post("/image", async (req, res) => {
       }
     );
 
-    res.json({ reply: response.data.choices[0].message.content });
+    res.json({
+      reply: response.data.choices[0].message.content
+    });
 
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Image failed" });
   }
 });
 
 // 🚀 START
 app.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log("🚀 ChatGPT-style backend running");
 });
