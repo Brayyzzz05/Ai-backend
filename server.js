@@ -1,3 +1,4 @@
+// ================= BACKEND (server.js) =================
 const express = require("express");
 const axios = require("axios");
 
@@ -10,14 +11,14 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // 🧠 MEMORY
 const memory = new Map();
 
-// 🧠 STRICT AI
+// 🧠 AI FUNCTION
 async function askAI(messages) {
   const res = await axios.post(
     "https://api.openai.com/v1/chat/completions",
     {
       model: "gpt-4o-mini",
       messages,
-      temperature: 0
+      temperature: 0 // strict (no guessing)
     },
     {
       headers: {
@@ -29,14 +30,12 @@ async function askAI(messages) {
   return res.data.choices[0].message.content;
 }
 
-// 💬 CHAT
+// ================= CHAT =================
 app.post("/chat", async (req, res) => {
   try {
     const { userId, message } = req.body;
 
-    if (!memory.has(userId)) {
-      memory.set(userId, []);
-    }
+    if (!memory.has(userId)) memory.set(userId, []);
 
     const history = memory.get(userId);
 
@@ -49,8 +48,7 @@ You are a STRICT study AI.
 Rules:
 - NEVER guess
 - If unsure → say "I don't know"
-- Be accurate
-- Show full math steps
+- Show steps for math
 - Format:
 
 Answer:
@@ -76,16 +74,14 @@ Explanation:
   }
 });
 
-// 🔥 RESET MEMORY
+// ================= RESET =================
 app.post("/reset", (req, res) => {
   const { userId } = req.body;
-
   memory.delete(userId);
-
   res.json({ message: "Memory cleared" });
 });
 
-// 🧪 QUIZ
+// ================= QUIZ =================
 app.post("/quiz", async (req, res) => {
   const { topic } = req.body;
 
@@ -97,7 +93,7 @@ app.post("/quiz", async (req, res) => {
   res.json({ reply });
 });
 
-// 🃏 FLASHCARD
+// ================= FLASHCARD =================
 app.post("/flashcard", async (req, res) => {
   const { topic } = req.body;
 
@@ -109,7 +105,7 @@ app.post("/flashcard", async (req, res) => {
   res.json({ reply });
 });
 
-// 📸 IMAGE
+// ================= IMAGE =================
 app.post("/image", async (req, res) => {
   const { imageUrl, prompt } = req.body;
 
@@ -139,12 +135,13 @@ app.post("/image", async (req, res) => {
       reply: response.data.choices[0].message.content
     });
 
-  } catch {
+  } catch (err) {
+    console.log(err.message);
     res.status(500).json({ error: "Image failed" });
   }
 });
 
-// 🚀 START
+// ================= START =================
 app.listen(PORT, () => {
-  console.log("🚀 Backend running (FINAL)");
+  console.log("🚀 Backend running");
 });
