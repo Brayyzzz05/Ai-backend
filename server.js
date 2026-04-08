@@ -1,147 +1,72 @@
-// ================= BACKEND (server.js) =================
-const express = require("express");
-const axios = require("axios");
+import express from "express";
+import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const SAMBANOVA_API_KEY = process.env.SAMBANOVA_API_KEY;
 
-// 🧠 MEMORY
-const memory = new Map();
-
-// 🧠 AI FUNCTION
-async function askAI(messages) {
-  const res = await axios.post(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      model: "gpt-4o-mini",
-      messages,
-      temperature: 0 // strict (no guessing)
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`
-      }
-    }
-  );
-
-  return res.data.choices[0].message.content;
-}
-
-// ================= CHAT =================
 app.post("/chat", async (req, res) => {
   try {
-    const { userId, message } = req.body;
+    const { message } = req.body;
 
-    if (!memory.has(userId)) memory.set(userId, []);
+    if (!message) {
+      return res.json({ error: "No message provided" });
+    }
 
-    const history = memory.get(userId);
-
-    const messages = [
-      {
-        role: "system",
-        content: `
-You are a STRICT study AI.
-
-Rules:
-- NEVER guess
-- If unsure → say "I don't know"
-- Show steps for math
-- Format:
-
-Answer:
-Explanation:
-`
+    const response = await fetch("https://api.sambanova.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${SAMBANOVA_API_KEY}`,
+        "Content-Type": "application/json"
       },
-      ...history,
-      { role: "user", content: message }
-    ];
+      body: JSON.stringify({
+        model: "Meta-Llama-3.1-70B-Instruct", // example model
+        temperature: 0.3,
+        max_tokens: 200,
 
-    const reply = await askAI(messages);
-
-    history.push({ role: "user", content: message });
-    history.push({ role: "assistant", content: reply });
-
-    if (history.length > 20) history.splice(0, 2);
-
-    res.json({ reply });
-
-  } catch (err) {
-    console.log(err.response?.data || err.message);
-    res.status(500).json({ error: "AI failed" });
-  }
-});
-
-// ================= RESET =================
-app.post("/reset", (req, res) => {
-  const { userId } = req.body;
-  memory.delete(userId);
-  res.json({ message: "Memory cleared" });
-});
-
-// ================= QUIZ =================
-app.post("/quiz", async (req, res) => {
-  const { topic } = req.body;
-
-  const reply = await askAI([
-    { role: "system", content: "Create a quiz with answer and explanation." },
-    { role: "user", content: topic }
-  ]);
-
-  res.json({ reply });
-});
-
-// ================= FLASHCARD =================
-app.post("/flashcard", async (req, res) => {
-  const { topic } = req.body;
-
-  const reply = await askAI([
-    { role: "system", content: "Create a flashcard (Q&A)." },
-    { role: "user", content: topic }
-  ]);
-
-  res.json({ reply });
-});
-
-// ================= IMAGE =================
-app.post("/image", async (req, res) => {
-  const { imageUrl, prompt } = req.body;
-
-  try {
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-4o-mini",
         messages: [
           {
+            role: "system",
+            content: `
+You are a strict study AI.
+
+RULES:
+- Always return:
+  Answer: ...
+  Explanation: ...
+- Never repeat the question.
+- Solve math correctly (factorisation, algebra, identities).
+- Be clear and structured.
+- Answer all subjects.
+            `
+          },
+          {
             role: "user",
-            content: [
-              { type: "text", text: prompt || "Explain this image" },
-              { type: "image_url", image_url: { url: imageUrl } }
-            ]
+            content: message
           }
         ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`
-        }
-      }
-    );
+      })
+    });
+
+    const data = await response.json();
+
+    const text = data?.choices?.[0]?.message?.content;
+
+    if (!text) {
+      return res.json({ error: "AI failed" });
+    }
 
     res.json({
-      reply: response.data.choices[0].message.content
+      answer: text
     });
 
   } catch (err) {
-    console.log(err.message);
-    res.status(500).json({ error: "Image failed" });
+    console.error(err);
+    res.json({ error: "AI error" });
   }
 });
 
-// ================= START =================
-app.listen(PORT, () => {
-  console.log("🚀 Backend running");
+app.listen(3000, () => {
+  console.log("SambaNova backend running");
 });
